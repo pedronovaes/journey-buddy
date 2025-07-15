@@ -1,6 +1,30 @@
+import os
 import shutil
 import sqlite3
+
 import pandas as pd
+import requests
+
+
+def get_data(db_url: str, file: str, backup_file: str, overwrite: bool = False) -> None:
+    """
+    Get data from Google API to use in the chatbot demo.
+
+    Args:
+        db_url: travel sql url path.
+        file: database path.
+        backup_file: backup database path.
+    """
+
+    if overwrite or os.path.exists(file):
+        response = requests.get(url=db_url)
+        response.raise_for_status()  # Raises an HTTPError, if one occurred.
+
+        with open(file=file, mode='wb') as f:
+            f.write(response.content)
+
+        # Backup file. We will use this to "reset" the database in each section.
+        shutil.copy(src=file, dst=backup_file)
 
 
 def update_dates(file: str, backup_file: str) -> None:
@@ -34,8 +58,6 @@ def update_dates(file: str, backup_file: str) -> None:
 
     current_time = pd.to_datetime('now').tz_localize(example_time.tz)
     time_diff = current_time - example_time
-
-    print(tdf.keys())
 
     # Updates datetime to look like it's current.
     tdf['bookings']['book_date'] = (
