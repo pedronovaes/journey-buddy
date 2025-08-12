@@ -3,6 +3,10 @@ Assistant's tools for flights topics.
 """
 
 import sqlite3
+from datetime import date, datetime
+from typing import Optional
+import pytz
+
 from langchain_core.tools import tool
 from langchain_core.runnables import RunnableConfig
 
@@ -20,7 +24,7 @@ def fetch_user_flight_information(config: RunnableConfig) -> list[dict]:
     """
 
     configuration = config.get('configurable', {})
-    passenger_id = configuration.get('passenger_id', {})
+    passenger_id = configuration.get('passenger_id', None)
     db = configuration.get('db', '')
 
     if not passenger_id:
@@ -45,6 +49,59 @@ def fetch_user_flight_information(config: RunnableConfig) -> list[dict]:
     """
 
     cursor.execute(query, (passenger_id,))
+    rows = cursor.fetchall()
+    column_names = [column[0] for column in cursor.description]
+    results = [dict(zip(column_names, row)) for row in rows]
+
+    cursor.close()
+    conn.close()
+
+    return results
+
+
+@tool
+def search_flights(
+    config: RunnableConfig,
+    departure_airport: Optional[str] = None,
+    arrival_airport: Optional[str] = None,
+    start_time: Optional[date | datetime] = None,
+    end_time: Optional[date | datetime] = None,
+    limit: int = 20
+) -> list[dict]:
+    """
+    Search for flights based on departure airport, arrival airport, and
+    departure time range.
+    """
+
+    configuration = config.get('configurable', {})
+    db = configuration.get('db', '')
+
+    conn = sqlite3.connect(database=db)
+    cursor = conn.cursor()
+
+    query = "select * from flights where 1 = 1"
+    params = []
+
+    if departure_airport:
+        query += " and departure_airport = ?"
+        params.append(departure_airport)
+
+    if arrival_airport:
+        query += " and arrival_airport = ?"
+        params.append(arrival_airport)
+
+    if start_time:
+        query += " and scheduled_departure >= ?"
+        params.append(start_time)
+
+    if end_time:
+        query += " and scheduled_departure <= ?"
+        params.append(end_time)
+
+    query += " limit ?"
+    params.append(limit)
+
+    cursor.execute(query, params)
     rows = cursor.fetchall()
     column_names = [column[0] for column in cursor.description]
     results = [dict(zip(column_names, row)) for row in rows]
